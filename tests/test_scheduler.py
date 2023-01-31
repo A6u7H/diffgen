@@ -5,6 +5,7 @@ import cv2
 import torchvision.transforms as T
 
 from torchvision.utils import make_grid
+from dataset import ImageTransform, ImageReverseTransform
 from PIL import Image
 
 from scheduler import LinearScheduler, CosineScheduler
@@ -14,19 +15,8 @@ from diffusion import Diffusion
 class TestDataset(unittest.TestCase):
     def test_linearschedule(self):
         image = Image.open("tests/images/1.jpg")
-        transpose = T.Compose([
-            T.Resize((256, 256)),
-            T.ToTensor(),
-            T.Lambda(lambda x: (x * 2) - 1)
-        ])
-
-        reverse_transpose = T.Compose([
-            T.Lambda(lambda x: (x + 1) * 0.5),
-            T.Lambda(lambda x: x.permute(1, 2, 0)),
-            T.Lambda(lambda x: (x * 255)),
-            T.Lambda(lambda x: x.numpy().astype(np.uint8)),
-            # T.ToPILImage()
-        ])
+        transpose = ImageTransform((256, 256))
+        reverse_transpose = ImageReverseTransform()
 
         beta_start = 0.0001
         beta_end = 0.02
@@ -48,22 +38,8 @@ class TestDataset(unittest.TestCase):
 
     def test_cosinechedule(self):
         image = Image.open("tests/images/1.jpg")
-        transpose = T.Compose([
-            T.Resize((256, 256)),
-            T.ToTensor(),
-            T.Lambda(lambda x: (x * 2) - 1)
-        ])
-
-        reverse_transpose = T.Compose([
-            T.Lambda(lambda x: (x + 1) * 0.5),
-            T.Lambda(lambda x: x.permute(1, 2, 0)),
-            T.Lambda(lambda x: (x * 255)),
-            T.Lambda(lambda x: x.numpy().astype(np.uint8)),
-            # T.ToPILImage()
-        ])
-
-        beta_start = 0.0001
-        beta_end = 0.02
+        transpose = ImageTransform((256, 256))
+        reverse_transpose = ImageReverseTransform()
         timesteps = 100
 
         scheduler = CosineScheduler(timesteps)
