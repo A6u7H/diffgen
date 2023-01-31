@@ -14,7 +14,6 @@ class Diffusion:
     ) -> None:
         self.scheduler = scheduler
         self.image_size = image_size
-
         self.beta = self.scheduler.get_schedule()
         self.alpha = 1 - self.beta
         self.alpha_cumprod = torch.cumprod(self.alpha, dim=0)
