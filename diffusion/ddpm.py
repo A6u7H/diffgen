@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 
 from typing import Optional
 
@@ -13,7 +12,6 @@ class Diffusion:
         scheduler: Scheduler,
         image_size: int,
     ) -> None:
-        # super(Diffusion, self).__init__()
         self.scheduler = scheduler
         self.image_size = image_size
 
