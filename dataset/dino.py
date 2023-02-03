@@ -1,3 +1,4 @@
+import torch
 import pandas as pd
 import numpy as np
 
@@ -29,7 +30,9 @@ class DinoDataset(Dataset):
         self.points = np.stack((x, y), axis=1)
 
     def __getitem__(self, idx) -> Tensor:
-        return self.points[idx]
+        return torch.from_numpy(
+            self.points[idx].astype(np.float32)
+        )
 
     def __len__(self):
         return len(self.points)

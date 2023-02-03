@@ -2,33 +2,27 @@ import torch
 import torch.nn as nn
 
 from position_embedding import SinusoidalEmbedding
+from layers import LinearBlock
 
 
-class Block(nn.Module):
-    def __init__(self, size: int):
-        super().__init__()
+class LinNet(nn.Module):
+    def __init__(
+        self,
+        hidden_size: int = 128,
+        hidden_layers: int = 3,
+        emb_size: int = 128
+    ) -> None:
+        super(LinNet, self).__init__()
 
-        self.ff = nn.Linear(size, size)
-        self.act = nn.GELU()
-
-    def forward(self, x: torch.Tensor):
-        return x + self.act(self.ff(x))
-
-
-class MLP(nn.Module):
-    def __init__(self, hidden_size: int = 128, hidden_layers: int = 3, emb_size: int = 128,
-                 time_emb: str = "sinusoidal", input_emb: str = "sinusoidal"):
-        super().__init__()
-
-        self.time_mlp = SinusoidalEmbedding(emb_size, time_emb)
-        self.input_mlp1 = SinusoidalEmbedding(emb_size, scale=25.0)
-        self.input_mlp2 = SinusoidalEmbedding(emb_size, scale=25.0)
+        self.time_mlp = SinusoidalEmbedding(emb_size, scale=1.0)
+        self.input_mlp1 = SinusoidalEmbedding(emb_size, scale=25.0)  # https://bmild.github.io/fourfeat/
+        self.input_mlp2 = SinusoidalEmbedding(emb_size, scale=25.0)  # https://bmild.github.io/fourfeat/
 
         concat_size = len(self.time_mlp.layer) + \
             len(self.input_mlp1.layer) + len(self.input_mlp2.layer)
         layers = [nn.Linear(concat_size, hidden_size), nn.GELU()]
         for _ in range(hidden_layers):
-            layers.append(Block(hidden_size))
+            layers.append(LinearBlock(hidden_size))
         layers.append(nn.Linear(hidden_size, 2))
         self.joint_mlp = nn.Sequential(*layers)
 
