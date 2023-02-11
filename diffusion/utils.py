@@ -1,10 +1,14 @@
-import torch
+from torch import Tensor
+from typing import Tuple
 
 
 def extract(
-    a: torch.Tensor,
-    t: torch.Tensor
+    arr: Tensor,
+    timesteps: Tensor,
+    broadcast_shape: Tuple[int]
 ):
-    batch_size = t.shape[0]
-    out = torch.gather(a, -1, t)
-    return out.reshape(batch_size, 1, 1, 1)
+    broadcast_shape = (len(timesteps), *broadcast_shape)
+    res = arr[timesteps].float()
+    while len(res.shape) < len(broadcast_shape):
+        res = res[..., None]
+    return res.expand(broadcast_shape)

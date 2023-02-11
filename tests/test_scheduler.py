@@ -1,5 +1,6 @@
 import unittest
 import torch
+import numpy as np
 import cv2
 
 from torchvision.utils import make_grid
@@ -16,16 +17,16 @@ class TestDataset(unittest.TestCase):
         transpose = ImageTransform((256, 256))
         reverse_transpose = ImageReverseTransform()
 
-        beta_start = 0.0001
-        beta_end = 0.02
+        beta_start = 1e-5
+        beta_end = 1e-2
         timesteps = 100
 
         scheduler = LinearScheduler(beta_start, beta_end, timesteps)
         diffusion_model = Diffusion(scheduler, 256)
 
         image_tensor = transpose(image)
-        indcies = [i for i in range(0, 100, 10)]
-        noise_image, noise = diffusion_model.noise_image(
+        indcies = np.arange(0, 100, 10)
+        noise_image, noise = diffusion_model.q_sample(
             image_tensor,
             torch.tensor(indcies)
         )
@@ -43,8 +44,8 @@ class TestDataset(unittest.TestCase):
         transpose = ImageTransform((256, 256))
         reverse_transpose = ImageReverseTransform()
 
-        beta_start = 0.055  # 1e-5
-        beta_end = 0.055  # 1e-2
+        beta_start = 1e-4
+        beta_end = 1e-2
         timesteps = 100
 
         scheduler = LinearScheduler(beta_start, beta_end, timesteps)
@@ -59,7 +60,7 @@ class TestDataset(unittest.TestCase):
                 (betas[-i] * torch.randn_like(x_start))
             )
 
-        indcies = [i for i in range(0, 100, 10)]
+        indcies = np.arange(0, 100, 10)
         x_seq = torch.stack(x_seq)[indcies]
 
         alls_stages = make_grid(x_seq, nrow=10)
@@ -80,8 +81,8 @@ class TestDataset(unittest.TestCase):
         diffusion_model = Diffusion(scheduler, 256)
 
         image_tensor = transpose(image)
-        indcies = [i for i in range(0, 100, 10)]
-        noise_image, noise = diffusion_model.noise_image(
+        indcies = np.arange(0, 100, 10)
+        noise_image, noise = diffusion_model.q_sample(
             image_tensor,
             torch.tensor(indcies)
         )

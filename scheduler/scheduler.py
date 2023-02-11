@@ -15,8 +15,9 @@ class LinearScheduler(Scheduler):
         timesteps: int
     ) -> None:
         super(LinearScheduler, self).__init__()
-        self.beta_start = beta_start
-        self.beta_end = beta_end
+        scale = 1000 / timesteps
+        self.beta_start = scale * beta_start
+        self.beta_end = scale * beta_end
         self.timesteps = timesteps
 
     def get_schedule(self):
