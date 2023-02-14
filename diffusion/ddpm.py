@@ -1,10 +1,14 @@
 import torch
 import torch.nn.functional as F
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable
+from collections import namedtuple
 
 from scheduler import Scheduler
 from .utils import extract
+
+
+Prediction = namedtuple('Prediction', ['pred_noise', 'pred_x_start'])
 
 
 class Diffusion:
@@ -12,6 +16,7 @@ class Diffusion:
         self,
         scheduler: Scheduler,
         image_size: int,
+        objective: str
     ) -> None:
         self.scheduler = scheduler
         self.image_size = image_size
@@ -32,7 +37,17 @@ class Diffusion:
             * (1. - self.alpha_cumprod_prev) \
             / (1. - self.alphas_cumprod)
 
+        self.sqrt_recip_alphas_cumprod = torch.sqrt(
+            1. / self.alphas_cumprod
+        )
+        self.sqrt_recipm1_alphas_cumprod = torch.sqrt(
+            1. / self.alphas_cumprod - 1
+        )
+
     def get_variance(self, time: int, image_shape: Tuple[int]):
+        """
+        explanation: https://lilianweng.github.io/posts/2021-07-11-diffusion-models/#nice
+        """
         if time == 0:
             return 0
 
@@ -43,10 +58,66 @@ class Diffusion:
         variance = variance.clip(1e-20)
         return variance
 
+    def predict_start_from_noise(
+        self,
+        x_t: torch.Tensor,
+        noise: torch.Tensor,
+        time: torch.Tensor
+    ):
+        """
+        x_s = 1 / sqrt(alpha_t') * (x_t - sqrt(1 - alpha_t') * noise)
+        explanation: https://theaisummer.com/diffusion-models/?fbclid=IwAR1BIeNHqa3NtC8SL0sKXHATHklJYphNH-8IGNoO3xZhSKM_GYcvrrQgB0o
+        """
+        return (
+            extract(self.sqrt_recip_alphas_cumprod, time, x_t.shape) * x_t -
+            extract(self.sqrt_recipm1_alphas_cumprod, time, x_t.shape) * noise
+        )
+
+    def predict_noise_from_start(
+        self,
+        x_s: torch.Tensor,
+        x_t: torch.Tensor,
+        time: torch.Tensor
+    ):
+        """
+        noise = 1 / sqrt(alpha_t') * (x_t - sqrt(1 - alpha_t') * noise)
+        explanation: https://theaisummer.com/diffusion-models/?fbclid=IwAR1BIeNHqa3NtC8SL0sKXHATHklJYphNH-8IGNoO3xZhSKM_GYcvrrQgB0o
+        """
+        return (
+            (extract(self.sqrt_recip_alphas_cumprod, time, x_t.shape) * x_t - x_s) /
+            extract(self.sqrt_recipm1_alphas_cumprod, time, x_t.shape)
+        )
+
+    def q_posterior(
+        self,
+        x_s: torch.Tensor,
+        x_t: torch.Tensor,
+        time: torch.Tensor
+    ):
+        term_s = extract(self.posterior_mean_coef1, time, x_s.shape)
+        term_t = extract(self.posterior_mean_coef1, time, x_t.shape)
+        return term_s * x_s + term_t * x_t
+
+    def model_predictions(
+        self,
+        model: Callable,
+        image: torch.Tensor,
+        time: torch.Tensor,
+    ):
+        model_output = model(image, time)
+        if self.objective == 'pred_noise':
+            pred_noise = model_output
+            x_start = self.predict_start_from_noise(image, time, pred_noise)
+        elif self.objective == 'pred_xs':
+            x_start = model_output
+            pred_noise = self.predict_noise_from_start(image, time, x_start)
+
+        return Prediction(pred_noise, x_start)
+
     def q_sample(
         self,
         image: torch.Tensor,
-        time: int,
+        time: torch.Tensor,
         noise: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         if noise is None:
@@ -57,41 +128,51 @@ class Diffusion:
         sqrt_alpha_m1_t = torch.sqrt(1 - alpha_cumprod_t)
         return sqrt_alpha_t * image + sqrt_alpha_m1_t * noise, noise
 
-    def q_posterior(
+    def p_mean_variance(
         self,
-        image_s: torch.Tensor,
-        image_t: torch.Tensor,
-        time: int
+        model: Callable,
+        image: torch.Tensor,
+        time: torch.Tensor,
     ):
-        term_s = extract(self.posterior_mean_coef1, time, image_s.shape)
-        term_t = extract(self.posterior_mean_coef1, time, image_t.shape)
-        return term_s * image_s + term_t * image_t
+        preds = self.model_predictions(model, image, time)
+        x_start = preds.pred_x_start
 
-    def sample(self, model, n):
-        model.eval()
-        with torch.no_grad():
-            image = torch.randn((n, 3, self.img_size, self.img_size))
-            for i in reversed(range(1, self.noise_steps)):
-                time = torch.tensor([i])
-                predicted_noise = model(image, time)
+        model_mean = self.q_posterior(
+            image_s=x_start,
+            image_t=image,
+            time=time
+        )
 
-                # alpha = self.alpha[t][:, None, None, None]
-                # alpha_hat = self.alpha_hat[t][:, None, None, None]
-                # beta = self.beta[t][:, None, None, None]
+        model_variance = self.get_variance(time)
+        return model_mean, model_variance
 
-                alpha_t = extract(self.alpha, time, image.shape)
-                alpha_cumprod_t = extract(
-                    self.alpha_cumprod,
-                    time,
-                    image.shape
-                )
+    def p_sample(
+        self,
+        model: Callable,
+        image: torch.Tensor,
+        time: torch.Tensor
+    ):
+        model_mean, model_variance = self.p_mean_variance(
+            model,
+            image,
+            time
+        )
+        noise = torch.randn_like(image) if time > 0 else 0
+        pred_prev_img = model_mean + (model_variance ** 0.5) * noise  # (0.5 * model_log_variance).exp() * noise
+        return pred_prev_img
 
-                mean = q_posterior()
-                noise = torch.randn_like(image)
-                varience = self.get_variance(time, image.shape)
+    def p_sample_loop(
+        self,
+        model: Callable,
+        shape: Tuple[int],
+        device: str = "cuda"
+    ):
+        image = torch.randn(shape, device=device)
+        image_list = [image]
 
-                x = 1 / torch.sqrt(alpha_t) * (image - ((1 - alpha_t) / (torch.sqrt(1 - alpha_cumprod_t))) * predicted_noise) + torch.sqrt(varience) * noise
-        model.train()
-        x = (x.clamp(-1, 1) + 1) / 2
-        x = (x * 255).type(torch.uint8)
-        return x
+        for time in range(self.num_timesteps, -1, -1):
+            img = self.p_sample(model, image, time)
+            image_list.append(img)
+
+        result = torch.stack(image_list, dim=1)
+        return result
