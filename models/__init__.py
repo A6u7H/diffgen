@@ -1,1 +1,2 @@
-from unet import UNet
+from .unet import UNet
+from .linnet import LinNet
