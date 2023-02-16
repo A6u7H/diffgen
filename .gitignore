@@ -1,4 +1,9 @@
 **.pyc
 tests/convert
+
 data/
+experiments/
+.aim
+.vscode
+
 **checkpoint.ipynb

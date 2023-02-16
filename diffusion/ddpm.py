@@ -174,7 +174,8 @@ class Diffusion:
         model: Callable,
         shape: Tuple[int],
         num_timesteps: int,
-        device: str = "cuda"
+        device: str = "cuda",
+        return_all_timesteps: bool = False
     ):
         image = torch.randn(shape, device=device)
         image_list = [image]
@@ -184,5 +185,8 @@ class Diffusion:
             img = self.p_sample(model, image, time_tensor)
             image_list.append(img)
 
-        result = torch.stack(image_list, dim=1)
+        if not return_all_timesteps:
+            result = torch.stack(image_list, dim=1)
+        else:
+            result = image_list[-1]
         return result
