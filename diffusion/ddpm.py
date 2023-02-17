@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import torch.nn.functional as F
 
 from typing import Optional, Tuple, Callable
@@ -50,9 +51,6 @@ class Diffusion:
         """
         explanation: https://lilianweng.github.io/posts/2021-07-11-diffusion-models/#nice
         """
-        # if time == 0:
-        #     return 0
-
         variance = extract(self.betas, time, image_shape) \
             * (1. - extract(self.alphas_cumprod_prev, time, image_shape)) \
             / (1. - extract(self.alphas_cumprod, time, image_shape))
@@ -97,7 +95,7 @@ class Diffusion:
         time: torch.Tensor
     ):
         term_s = extract(self.posterior_mean_coef1, time, x_start.shape)
-        term_t = extract(self.posterior_mean_coef1, time, x_time.shape)
+        term_t = extract(self.posterior_mean_coef2, time, x_time.shape)
         return term_s * x_start + term_t * x_time
 
     def model_predictions(
@@ -177,16 +175,10 @@ class Diffusion:
         device: str = "cuda",
         return_all_timesteps: bool = False
     ):
-        image = torch.randn(shape, device=device)
-        image_list = [image]
+        sample = torch.randn(shape).to(device)
+        timesteps = list(range(num_timesteps))[::-1]
 
-        for time in range(num_timesteps - 1, -1, -1):
-            time_tensor = torch.ones(shape[0], dtype=torch.int64) * time
-            img = self.p_sample(model, image, time_tensor)
-            image_list.append(img)
-
-        if not return_all_timesteps:
-            result = torch.stack(image_list, dim=1)
-        else:
-            result = image_list[-1]
-        return result
+        for time in timesteps:
+            time_tensor = torch.from_numpy(np.repeat(time, shape[0])).long()
+            sample = self.p_sample(model, sample, time_tensor)
+        return sample
