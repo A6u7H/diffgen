@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import torch
 import logging
@@ -13,7 +12,7 @@ from torch.utils.data import DataLoader
 from diffusion import Diffusion
 from models import LinNet
 from scheduler import LinearScheduler
-from dataset import DinoDataset, get_dinodataset
+from dataset import DinoDataset
 from aim import Run, Image
 
 
@@ -38,8 +37,8 @@ config = Namespace(
     num_points=8000
 )
 
-# dataset = DinoDataset(config.dataset_path, config.num_points)
-dataset = get_dinodataset(config.dataset_path, config.num_points)
+dataset = DinoDataset(config.dataset_path, config.num_points)
+# dataset = get_dinodataset(config.dataset_path, config.num_points)
 dataloader = DataLoader(
     dataset,
     batch_size=config.train_batch_size,
@@ -82,8 +81,7 @@ for epoch in range(config.num_epochs):
     model.train()
     with tqdm(dataloader) as pbar:
         pbar.set_description(f"Epoch {epoch}")
-        for batch in pbar:
-            images = batch[0]
+        for images in pbar:
             noise = torch.randn(images.shape)
             timesteps = torch.randint(
                 0, diffusion_model.scheduler.timesteps, (images.shape[0],)
